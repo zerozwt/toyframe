@@ -15,6 +15,7 @@ type Server interface {
 	AddListener(lis net.Listener) Server
 	Run() error
 	Close() error
+	CloseChannel() chan struct{}
 }
 
 type Handler func(*Context) error
@@ -83,6 +84,10 @@ func (s *server) Close() error {
 	s.lis = nil
 	close(s.close_ch)
 	return nil
+}
+
+func (s *server) CloseChannel() chan struct{} {
+	return s.close_ch
 }
 
 func (s *server) serve(lis net.Listener) {
