@@ -20,7 +20,11 @@ type Server interface {
 type Handler func(*Context) error
 
 func NewServer() Server {
-	return &server{}
+	return &server{
+		route:    make(map[string]Handler),
+		lis:      make([]net.Listener, 0),
+		close_ch: make(chan struct{}),
+	}
 }
 
 type server struct {
