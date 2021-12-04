@@ -20,7 +20,7 @@ func logger() *log.Logger {
 }
 
 func SetLogWriter(out io.Writer) {
-	logger := log.New(out, "toyframe", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	logger := log.New(out, "toyframe ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
 	g_logger.Store(logger)
 	listener.SetLogWriter(logger)
 	dialer.SetLogWriter(logger)
