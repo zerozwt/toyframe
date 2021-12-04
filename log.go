@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync/atomic"
 
+	"github.com/zerozwt/toyframe/dialer"
 	"github.com/zerozwt/toyframe/listener"
 )
 
@@ -22,6 +23,7 @@ func SetLogWriter(out io.Writer) {
 	logger := log.New(out, "toyframe", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
 	g_logger.Store(logger)
 	listener.SetLogWriter(logger)
+	dialer.SetLogWriter(logger)
 }
 
 type NullWriter struct{}
