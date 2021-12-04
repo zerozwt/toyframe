@@ -2,6 +2,7 @@ package tests
 
 import (
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -126,27 +127,29 @@ func setupChatServer(t *testing.T, listeners ...net.Listener) (toyframe.Server, 
 }
 
 func chatClientSender(reciever string, dial dialer.DialFunc, wg *sync.WaitGroup, t *testing.T) {
-	defer wg.Done()
-	ctx, err := toyframe.Call("tcp", "localhost:8888", "send", dial,
-		&ChatMsg_Send{Reciever: reciever, Content: "hello1"},
-		&ChatMsg_Send{Reciever: reciever, Content: "hello2"},
-		&ChatMsg_Send{Reciever: reciever, Content: "hello3"},
-		&ChatMsg_Send{Reciever: reciever, Content: "hello4"},
-		&ChatMsg_Send{Reciever: reciever, Content: "hello5"})
+	ctx, err := toyframe.Call("tcp", "localhost:8888", "send", dial)
 	if err != nil {
 		t.Errorf("call send failed: %v", err)
 		return
 	}
-	ctx.Close()
+	ctx.AddCloseHandler(wg.Done)
+	defer ctx.Close()
+
+	for i := 0; i < 5; i++ {
+		if err = ctx.WriteObj(&ChatMsg_Send{Reciever: reciever, Content: fmt.Sprintf("Hello %d", i+1)}); err != nil {
+			t.Errorf("call send failed: %v", err)
+			return
+		}
+	}
 }
 
 func chatClientReciever(name string, dial dialer.DialFunc, wg *sync.WaitGroup, t *testing.T) {
-	defer wg.Done()
 	ctx, err := toyframe.Call("tcp", "localhost:8888", "login", dial, &ChatMsg_Login{Name: name})
 	if err != nil {
 		t.Errorf("call login failed: %v", err)
 		return
 	}
+	ctx.AddCloseHandler(wg.Done)
 	defer ctx.Close()
 
 	msg_count := 0

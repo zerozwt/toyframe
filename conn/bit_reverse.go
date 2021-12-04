@@ -25,11 +25,12 @@ func (c *BitReverseConn) Write(b []byte) (int, error) {
 	for i := range b {
 		b[i] = b[i] ^ 0xFF
 	}
-	n, err := c.conn.Write(b)
-	for i := n; i < len(b); i++ {
-		b[i] = b[i] ^ 0xFF
-	}
-	return n, err
+	defer func() {
+		for i := range b {
+			b[i] = b[i] ^ 0xFF
+		}
+	}()
+	return c.conn.Write(b)
 }
 
 func (c *BitReverseConn) Close() error {
