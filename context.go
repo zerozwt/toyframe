@@ -24,25 +24,50 @@ type Context struct {
 	closed int32
 }
 
-func Call(network, addr, method string, dial dialer.DialFunc) (*Context, error) {
+func Call(network, addr, method string, dial dialer.DialFunc, params ...msgp.MarshalSizer) (*Context, error) {
 	if len(method) > 0xFF {
 		// method == "" is allowed
 		return nil, ErrMethodTooLong
 	}
 
+	// dial remote addr and create context
 	conn, err := dial(network, addr)
 	if err != nil {
 		return nil, err
 	}
 	ctx := newContext(conn)
 
-	buf := make([]byte, 1, 1+len(method))
-	buf[0] = byte(len(method))
-	for _, ch := range method {
-		buf = append(buf, byte(ch))
+	// send method message
+	if err = writeSimpleString(ctx.writer, method); err != nil {
+		ctx.Close()
+		return nil, err
 	}
 
-	_, err = ctx.writer.Write(buf)
+	// send params asynchronously
+	send_param_ch := make(chan error, 1)
+	go func() {
+		for _, item := range params {
+			if err := ctx.WriteObj(item); err != nil {
+				send_param_ch <- err
+				return
+			}
+		}
+		send_param_ch <- nil
+	}()
+
+	// read call method result
+	result, err := readSimpleString(ctx.reader)
+	if err != nil {
+		ctx.Close()
+		return nil, err
+	}
+	if len(result) > 0 {
+		ctx.Close()
+		return nil, errors.New(result)
+	}
+
+	// read send param result
+	err = <-send_param_ch
 	if err != nil {
 		ctx.Close()
 		return nil, err
@@ -123,4 +148,27 @@ func (wc *contextWriteCloser) Write(buf []byte) (int, error) {
 
 func (wc *contextWriteCloser) Close() error {
 	return wc.ctx.Close()
+}
+
+func readSimpleString(reader io.Reader) (string, error) {
+	len := [1]byte{}
+	if _, err := io.ReadFull(reader, len[:]); err != nil {
+		return "", err
+	}
+	data := make([]byte, len[0])
+	if _, err := io.ReadFull(reader, data); err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func writeSimpleString(writer io.Writer, data string) error {
+	buf := make([]byte, 1, 1+len(data))
+	buf[0] = byte(len(data))
+	for _, ch := range data {
+		buf = append(buf, byte(ch))
+	}
+
+	_, err := writer.Write(buf)
+	return err
 }

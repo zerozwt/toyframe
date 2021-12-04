@@ -2,7 +2,7 @@ package toyframe
 
 import (
 	"errors"
-	"io"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -99,28 +99,24 @@ func (s *server) serveContext(conn net.Conn) {
 		}
 	}()
 
-	m_len := [1]byte{}
-	if _, err := io.ReadFull(conn, m_len[:]); err != nil {
-		logger().Printf("read method length from %v failed: %v", conn.RemoteAddr().String(), err)
-		conn.Close()
-		return
-	}
-	method_data := make([]byte, m_len[0])
-	if _, err := io.ReadFull(conn, method_data); err != nil {
+	method, err := readSimpleString(conn)
+	if err != nil {
 		logger().Printf("read method from %v failed: %v", conn.RemoteAddr().String(), err)
 		conn.Close()
 		return
 	}
 
-	method := string(method_data)
 	s.RLock()
 	handler, ok := s.route[method]
 	s.RUnlock()
 	if !ok {
-		logger().Printf("method %s handler not found", method)
+		msg := fmt.Sprintf("method %s handler not found", method)
+		logger().Println(msg)
+		writeSimpleString(conn, msg)
 		conn.Close()
 		return
 	}
+	writeSimpleString(conn, "") // empty string means handler successfully found
 
 	ctx := newContext(conn)
 	ctx.Method = method
