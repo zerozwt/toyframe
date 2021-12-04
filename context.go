@@ -118,7 +118,7 @@ func (c *Context) WriteObj(obj msgp.MarshalSizer) error {
 	if err != nil {
 		return err
 	}
-	if err = binary.Write(bytes.NewBuffer(buf[:4]), binary.BigEndian, uint32(len(buf)-4)); err != nil {
+	if err = binary.Write(bytes.NewBuffer(buf[:0]), binary.BigEndian, uint32(len(buf)-4)); err != nil {
 		return err
 	}
 	_, err = c.writer.Write(buf)
