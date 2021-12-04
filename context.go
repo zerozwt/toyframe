@@ -20,6 +20,8 @@ type Context struct {
 
 	Method string
 
+	onClose []func()
+
 	conn   net.Conn
 	closed int32
 }
@@ -78,9 +80,25 @@ func Call(network, addr, method string, dial dialer.DialFunc, params ...msgp.Mar
 
 func (c *Context) Close() error {
 	if atomic.CompareAndSwapInt32(&(c.closed), 0, 1) {
+		defer func() {
+			for _, cb := range c.onClose {
+				func() {
+					defer func() {
+						if err := recover(); err != nil {
+							logger().Printf("panic in context's close callbacks: %v", err)
+						}
+					}()
+					cb()
+				}()
+			}
+		}()
 		return c.conn.Close()
 	}
 	return nil
+}
+
+func (c *Context) AddCloseHandler(cb func()) {
+	c.onClose = append(c.onClose, cb)
 }
 
 func (c *Context) LocalAddr() net.Addr {
@@ -129,6 +147,8 @@ func newContext(conn net.Conn) *Context {
 	ctx := &Context{
 		reader: conn,
 		conn:   conn,
+
+		onClose: make([]func(), 0),
 	}
 	ctx.writer = &contextWriteCloser{
 		conn: conn,
