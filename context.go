@@ -27,6 +27,10 @@ type Context struct {
 }
 
 func Call(network, addr, method string, dial dialer.DialFunc, params ...msgp.MarshalSizer) (*Context, error) {
+	return CallWithInterruptor(network, addr, method, dial, nil, params...)
+}
+
+func CallWithInterruptor(network, addr, method string, dial dialer.DialFunc, ich chan struct{}, params ...msgp.MarshalSizer) (*Context, error) {
 	if len(method) > 0xFF {
 		// method == "" is allowed
 		return nil, ErrMethodTooLong
@@ -38,6 +42,8 @@ func Call(network, addr, method string, dial dialer.DialFunc, params ...msgp.Mar
 		return nil, err
 	}
 	ctx := newContext(conn)
+	ctx.SetInterruptor(ich)
+	defer ctx.SetInterruptor(nil)
 
 	// send method message
 	if err = writeSimpleString(ctx.writer, method); err != nil {
@@ -143,6 +149,22 @@ func (c *Context) WriteObj(obj msgp.MarshalSizer) error {
 	return err
 }
 
+func (c *Context) SetInterruptor(ich chan struct{}) {
+	if ich == nil {
+		c.reader = c.conn
+		c.writer = &contextWriteCloser{
+			conn: c.conn,
+			ctx:  c,
+		}
+		return
+	}
+	c.reader = InterruptableReader(c.conn, ich)
+	c.writer = InterruptableWriter(&contextWriteCloser{
+		conn: c.conn,
+		ctx:  c,
+	}, ich)
+}
+
 func newContext(conn net.Conn) *Context {
 	ctx := &Context{
 		reader: conn,
@@ -168,27 +190,4 @@ func (wc *contextWriteCloser) Write(buf []byte) (int, error) {
 
 func (wc *contextWriteCloser) Close() error {
 	return wc.ctx.Close()
-}
-
-func readSimpleString(reader io.Reader) (string, error) {
-	len := [1]byte{}
-	if _, err := io.ReadFull(reader, len[:]); err != nil {
-		return "", err
-	}
-	data := make([]byte, len[0])
-	if _, err := io.ReadFull(reader, data); err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func writeSimpleString(writer io.Writer, data string) error {
-	buf := make([]byte, 1, 1+len(data))
-	buf[0] = byte(len(data))
-	for _, ch := range data {
-		buf = append(buf, byte(ch))
-	}
-
-	_, err := writer.Write(buf)
-	return err
 }

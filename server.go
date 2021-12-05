@@ -125,7 +125,11 @@ func (s *server) serveContext(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	writeSimpleString(conn, "") // empty string means handler successfully found
+	if err = writeSimpleString(conn, ""); err != nil { // empty string means handler successfully found
+		logger().Printf("send handler found to %v failed: %v", conn.RemoteAddr().String(), err)
+		conn.Close()
+		return
+	}
 
 	ctx := newContext(conn)
 	ctx.Method = method
