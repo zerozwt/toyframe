@@ -26,6 +26,10 @@ type Context struct {
 	closed int32
 }
 
+func NewContext(conn net.Conn) *Context {
+	return newContext(conn)
+}
+
 func Call(network, addr, method string, dial dialer.DialFunc, params ...msgp.MarshalSizer) (*Context, error) {
 	return CallWithInterruptor(network, addr, method, dial, nil, params...)
 }
